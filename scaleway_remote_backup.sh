@@ -1,6 +1,8 @@
 #!/bin/bash
-# (c) Jeremie FRANCOIS - jeremie.francois@tecrd.com
-# This script backs and instance up at scaleway (virtual server hosting company)
+# This script backs an instance up at scaleway (a nice virtual server hosting company)
+# Check the latest source on https://github.com/MoonCactus/scaleway_remote_backup
+# (c) Jeremie FRANCOIS - jeremie.francois@tecrd.com - https://www.linkedin.com/in/jeremiefrancois/
+# This script is published under the GNU GENERAL PUBLIC LICENSE (see LICENSE)
 
 set -e
 
@@ -55,8 +57,9 @@ while [[ $# -gt 0 ]]; do
 	o="$1"
 	shift
 	case "$o" in
-	'--token')      #O <SCALEWAY_API_TOKEN: your private API key (see User Account / Credentials / API Tokens on Scaleway)
+	'--token')      #O <SCALEWAY_API_TOKEN: your private API key (see User Account / Credentials / API Tokens on Scaleway). It can also be a file that contains the token.
 		API_TOKEN="$1"
+		[[ -f "$API_TOKEN" ]] && API_TOKEN=$(grep '^[a-zA-Z0-9]' "$API_TOKEN")
 		shift
 		;;
 	'--server')     #O <SERVER_NAME>: either the scaleway identifier or the exact name of the server to backup
@@ -85,7 +88,7 @@ fi
 APIURL='https://api.scaleway.com/instance/v1/zones/fr-par-1'
 
 # Beautifier on error (set -e)
-trap '' exit 
+trap 'date; echo' exit 
 
 # Curl wrapper for calling scaleway API. See https://developers.scaleway.com/en/products/instance/api/
 CALL()
@@ -129,11 +132,10 @@ srvjson=$(CALL --request GET "${APIURL}/servers/${SERVERID}" --data-raw '')
 SERVERID=$(echo "$srvjson" | jq .server.id | tr -d '"')
 ROOTVOLUME=$(echo "$srvjson" | jq .server.image.root_volume.id)   # useful mostly when you want to create a new server
 ARCHTYPE=$(echo "$srvjson" | jq .server.image.arch | tr -d '"')
-printf 'Server: "%s" (id:"%s", arch:"%s")\n' "$SERVERNAME" "$SERVERID" "$ARCHTYPE"
 SERVER_STATE=$(echo "$srvjson" | jq '.server.state' | tr -d '"')
 
 # LIST EXISTING IMAGES
-echo "Existing images for this server:"
+printf 'Server: "%s" (id:"%s", arch:"%s") has following existing images:\n' "$SERVERNAME" "$SERVERID" "$ARCHTYPE"
 
 imagelist=$(CALL --request GET "${APIURL}/images?organization=${ORGANIZATION}" |
 	jq '.images[]|.id,.name,.modification_date,.from_server' | paste - - - - |
@@ -171,7 +173,7 @@ maxidx=$(($maxidx + 1))
 BAKNAME="${SERVERNAME}-${KEYWORD}-${maxidx}"
 
 # CREATE IMAGE
-echo "Creating backup image: $BAKNAME"
+printf 'Creating backup image: "%s"' "$BAKNAME"
 # The following API call fails with a weird authentication issue:
 #   payload=$(printf '{ "organization":"%s", "name":"%s", "arch":%s, "root_volume":%s }' "${ORGANIZATION}" "${BAKNAME}" "${ARCHTYPE}" "${ROOTVOLUME}")
 # So we do it by mimicking the WEB UI call:
@@ -189,7 +191,7 @@ fi
 
 # DELETE FORMER AUTOBACKUPS
 echo "$imagelist" | grep -- "-${KEYWORD}-" | grep -v -- "-${KEYWORD}-${maxidx}" | while read IMGID IMGDATE IMGNAME; do
-	echo "Deleting previous backup image: $IMGNAME ($IMGDATE, $IMGID)..."
+	echo "Deleting previous backup image: $IMGNAME ($IMGDATE, $IMGID)"
 	IMGID=$(echo "$IMGID" | tr -d '"')
 	CALL "${APIURL}/images/${IMGID}" -X DELETE
 done
@@ -199,15 +201,14 @@ CALL --request GET "${APIURL}/snapshots" |
 	jq '.snapshots[]|.id,.name' | paste - - |
 	grep "\"${SERVERNAME}-${KEYWORD}-" | grep -v "\"$BAKNAME" |
 	while read SNAPID SNAPNAME; do
-		echo "  Deleting associated snapshot: $SNAPNAME ($SNAPID)..."
+		echo "  Deleting associated snapshot: $SNAPNAME ($SNAPID)"
 		SNAPID=$(echo "$SNAPID" | tr -d '"')
 		CALL "${APIURL}/snapshots/${SNAPID}" -X DELETE  
 	done
 
 ########################################################################
 
-echo "SUCCESS: backup done, remote name is $BAKNAME"
-trap '' exit
+echo "SUCCESS: backup done, remote name is '$BAKNAME'"
 
 # HOW TO CREATE A SERVER (UNUSED)
 create_server()
