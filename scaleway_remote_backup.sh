@@ -49,19 +49,22 @@ fi
 API_TOKEN=
 SERVER_NAME=
 KEYWORD=
-SHOWONLY='n'
+SERVER_STATUS='n'
 
 while [[ $# -gt 0 ]]; do
 	o="$1"
 	shift
 	case "$o" in
-	'--token') #O <SCALEWAY_API_TOKEN: your private API key (see User Account / Credentials / API Tokens on Scaleway)
+	'--token')      #O <SCALEWAY_API_TOKEN: your private API key (see User Account / Credentials / API Tokens on Scaleway)
 		API_TOKEN="$1"
 		shift
 		;;
-	'--server')    #O <SERVER_NAME>: either the scaleway identifier or the exact name of the server to backup
+	'--server')     #O <SERVER_NAME>: either the scaleway identifier or the exact name of the server to backup
 		SERVER_NAME="$1"
 		shift
+		;;
+	'--status')     #O dumps server status (JSON structure)
+		SERVER_STATUS='y'
 		;;
 	'--keyword')    #O <KEYWORD>: (requires --server) a keyword to use within the name of the backup.
 		KEYWORD="$1"
@@ -142,6 +145,11 @@ else
 	echo -n "$imagelist" | sed 's/^/  /'
 fi
 echo
+
+if [[ "$SERVER_STATUS" = 'y' ]]; then
+	echo "Server status:"
+	echo "$srvjson" | jq .
+fi
 
 if [[ -z "$KEYWORD" ]]; then
 	echo "Done"
