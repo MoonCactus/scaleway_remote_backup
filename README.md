@@ -33,9 +33,14 @@ a backup that is _at least_ one week old (and at most two week old).
 ```
 PATH=/usr/sbin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin
 # m  h     dom     mon dow  user  command
-*    18     *       *   *   root  scaleway_remote_backup.sh --token /etc/scw_api_token --server 'myserver' --keyword 'daily' >>/var/log/scw_backups.log 2>&1
+0    18     *       *   *   root  scaleway_remote_backup.sh --token /etc/scw_api_token --server 'myserver' --keyword 'daily' >>/var/log/scw_backups.log 2>&1
 0    2     1-31/14  *   *   root  scaleway_remote_backup.sh --token /etc/scw_api_token --server 'myserver' --keyword 'weekA' >>/var/log/scw_backups.log 2>&1
 0    2     7-31/14  *   *   root  scaleway_remote_backup.sh --token /etc/scw_api_token --server 'myserver' --keyword 'weekB' >>/var/log/scw_backups.log 2>&1
+```
+
+Simpler even, you can also program a 7-day rolling backup by using the day of week as the token:
+```
+0    0      *       *   *   root  scaleway_remote_backup.sh --token /etc/scw_api_token --server 'myserver' --keyword "$(date +%a|cut -c1-3)" >>/var/log/scw_backups.log 2>&1
 ```
 
 Never forget to hide your API token from groups and others (i.e. `chmod go-rwx /etc/scw_api_token` above).
