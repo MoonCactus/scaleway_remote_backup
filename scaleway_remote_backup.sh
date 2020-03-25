@@ -173,7 +173,7 @@ maxidx=$(($maxidx + 1))
 BAKNAME="${SERVERNAME}-${KEYWORD}-${maxidx}"
 
 # CREATE IMAGE
-printf 'Creating backup image: "%s"' "$BAKNAME"
+printf 'Creating backup image: "%s"\n' "$BAKNAME"
 # The following API call fails with a weird authentication issue:
 #   payload=$(printf '{ "organization":"%s", "name":"%s", "arch":%s, "root_volume":%s }' "${ORGANIZATION}" "${BAKNAME}" "${ARCHTYPE}" "${ROOTVOLUME}")
 # So we do it by mimicking the WEB UI call:
@@ -208,7 +208,7 @@ CALL --request GET "${APIURL}/snapshots" |
 
 ########################################################################
 
-echo "SUCCESS: backup done, remote name is '$BAKNAME'"
+echo "SUCCESS: backup successfully ordered, remote name is '$BAKNAME'"
 
 # HOW TO CREATE A SERVER (UNUSED)
 create_server()
