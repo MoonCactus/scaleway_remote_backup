@@ -52,6 +52,7 @@ API_TOKEN=
 SERVER_NAME=
 KEYWORD=
 SERVER_STATUS='n'
+ZONE='nl-ams-1'
 
 while [[ $# -gt 0 ]]; do
 	o="$1"
@@ -64,6 +65,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	'--server')     #O <SERVER_NAME>: either the scaleway identifier or the exact name of the server to backup
 		SERVER_NAME="$1"
+		shift
+		;;
+	'--zone')     #O <ZONE_NAME>: nl-ams-1 or fr-par-1
+		ZONE="$1"
 		shift
 		;;
 	'--status')     #O dumps server status (JSON structure)
@@ -85,7 +90,7 @@ if [[ -z "$API_TOKEN" ]]; then
 fi
 
 
-APIURL='https://api.scaleway.com/instance/v1/zones/fr-par-1'
+APIURL="https://api.scaleway.com/instance/v1/zones/$ZONE"
 
 # Beautifier on error (set -e)
 trap 'date; echo' exit 
@@ -108,7 +113,7 @@ fi
 echo "Organization found: $ORGANIZATION"
 
 # LIST SERVERS
-serverlist=$(CALL --request GET "${APIURL}/servers" --data-raw '' | jq '.servers[]|.id,.name' | paste -d, - -)
+serverlist=$(CALL --request GET "${APIURL}/servers" --data '' | jq '.servers[]|.id,.name' | paste -d, - -)
 
 if [[ -z "$SERVER_NAME" ]]; then
 	echo "Here are your servers. Provide an existing id or name with --server to make a backup:"
@@ -128,7 +133,7 @@ fi
 
 # GET SERVER DETAILS
 SERVERNAME=$(echo "$serverlist" | grep "\"$SERVERID\"" | cut -d, -f2 | tr -d '"')
-srvjson=$(CALL --request GET "${APIURL}/servers/${SERVERID}" --data-raw '')
+srvjson=$(CALL --request GET "${APIURL}/servers/${SERVERID}" --data '')
 SERVERID=$(echo "$srvjson" | jq .server.id | tr -d '"')
 ROOTVOLUME=$(echo "$srvjson" | jq .server.image.root_volume.id)   # useful mostly when you want to create a new server
 ARCHTYPE=$(echo "$srvjson" | jq .server.image.arch | tr -d '"')
@@ -178,7 +183,7 @@ printf 'Creating backup image: "%s"\n' "$BAKNAME"
 #   payload=$(printf '{ "organization":"%s", "name":"%s", "arch":%s, "root_volume":%s }' "${ORGANIZATION}" "${BAKNAME}" "${ARCHTYPE}" "${ROOTVOLUME}")
 # So we do it by mimicking the WEB UI call:
 payload=$(printf '{"action":"backup","name":"%s"}' "$BAKNAME")
-result=$(CALL "${APIURL}/servers/$SERVERID/action" --data-binary "$payload" --compressed)
+result=$(CALL "${APIURL}/servers/$SERVERID/action" --data "$payload")
 
 if ! echo "$result" | grep -q '"status": "pending"'; then
 	# The API may reply something like "message":"at least one volume attached to the server is not available"
