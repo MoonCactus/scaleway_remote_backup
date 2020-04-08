@@ -183,7 +183,7 @@ printf 'Creating backup image: "%s"\n' "$BAKNAME"
 #   payload=$(printf '{ "organization":"%s", "name":"%s", "arch":%s, "root_volume":%s }' "${ORGANIZATION}" "${BAKNAME}" "${ARCHTYPE}" "${ROOTVOLUME}")
 # So we do it by mimicking the WEB UI call:
 payload=$(printf '{"action":"backup","name":"%s"}' "$BAKNAME")
-result=$(CALL "${APIURL}/servers/$SERVERID/action" --data "$payload")
+result=$(CALL "${APIURL}/servers/$SERVERID/action" --data-binary "$payload" --compressed)
 
 if ! echo "$result" | grep -q '"status": "pending"'; then
 	# The API may reply something like "message":"at least one volume attached to the server is not available"
