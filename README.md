@@ -1,6 +1,6 @@
 # scaleway_remote_backup.sh
 
-Bash script to trigger remote backups of scaleway server instances
+Bash script to trigger remote backups of scaleway server instances.
 
 Backups are named like `servername-keyword-index`, where
   * `servername` is the name of your scaleway instance
@@ -11,6 +11,7 @@ Once done, the script destroys the previous backups _that specifically match the
 
 Usage:
   * `--token <API_TOKEN>`: either your private API key, or a file that contains the API key
+  * `--zone <AVAILABILITY_ZONE>`: the scaleway datacenter that hosts the server, like "PAR 1" or "fr-par-1" (default), or "AMS1", "nl-ams-3"...
   * `--server <SERVER_NAME>`: either the scaleway identifier or the exact name of the server to backup
   * `--status` dumps server status (JSON structure)
   * `--keyword <KEYWORD>`: (requires --server) a keyword to use within the name of the backup.

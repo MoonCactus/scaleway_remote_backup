@@ -52,7 +52,7 @@ API_TOKEN=
 SERVER_NAME=
 KEYWORD=
 SERVER_STATUS='n'
-ZONE='nl-ams-1'
+ZONE='fr-par-1'
 
 while [[ $# -gt 0 ]]; do
 	o="$1"
@@ -67,8 +67,8 @@ while [[ $# -gt 0 ]]; do
 		SERVER_NAME="$1"
 		shift
 		;;
-	'--zone')     #O <ZONE_NAME>: nl-ams-1 or fr-par-1
-		ZONE="$1"
+	'--zone')     #O <AVAILABILITY_ZONE>: the scaleway datacenter that hosts the server, like "PAR 1" or "fr-par-1" (default), or "AMS1", "nl-ams-3"...
+		ZONE=$(echo "$1" | sed -e "s/^AMS\s*/nl-ams-/" -e "s/^PAR\s*/fr-par-/")
 		shift
 		;;
 	'--status')     #O dumps server status (JSON structure)
