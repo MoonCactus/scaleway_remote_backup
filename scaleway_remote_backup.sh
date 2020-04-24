@@ -22,6 +22,7 @@ EOF
 Omit --token for the script to ask interactively (so your API token does not show up in the process list nor shell history)
 Omit --server to display the list of your servers, by id and name
 Omit --keyword to show the list of your backups for the server
+Use, e.g. `--token <tkn> --server <name> --status --quiet | jq .server.state` to get the server state (running, stopping...)
 
 You can use different keywords for different backup time scales, like 'daily' and 'weekly'.
 E.g. use two interleaved two-week cronjobs named 'weekA' and 'weekB' to ensure a 1-2 week old backup at all times.
@@ -48,6 +49,7 @@ if ! which jq >/dev/null; then
 	exit 2
 fi
 
+QUIET='n'
 API_TOKEN=
 SERVER_NAME=
 KEYWORD=
@@ -58,6 +60,9 @@ while [[ $# -gt 0 ]]; do
 	o="$1"
 	shift
 	case "$o" in
+	'--quiet')      #O Do not print information to the console except errors (or --status content)
+		QUIET='y'
+		;;
 	'--token')      #O <SCALEWAY_API_TOKEN: your private API key (see User Account / Credentials / API Tokens on Scaleway). It can also be a file that contains the token.
 		API_TOKEN="$1"
 		[[ -f "$API_TOKEN" ]] && API_TOKEN=$(grep '^[a-zA-Z0-9]' "$API_TOKEN")
@@ -71,7 +76,7 @@ while [[ $# -gt 0 ]]; do
 		ZONE=$(echo "$1" | sed -e "s/^AMS\s*/nl-ams-/" -e "s/^PAR\s*/fr-par-/")
 		shift
 		;;
-	'--status')     #O dumps server status (JSON structure)
+	'--status')     #O dumps server status (JSON structure). To probably want to pass --quiet and --token arguments as well to process it.
 		SERVER_STATUS='y'
 		;;
 	'--keyword')    #O <KEYWORD>: (requires --server) a keyword to use within the name of the backup.
@@ -89,11 +94,17 @@ if [[ -z "$API_TOKEN" ]]; then
 	read API_TOKEN
 fi
 
+info()
+{
+	if [[ "$QUIET" = 'n' ]]; then
+		echo "$@"
+	fi
+}
 
 APIURL="https://api.scaleway.com/instance/v1/zones/$ZONE"
 
 # Beautifier on error (set -e)
-trap 'date; echo' exit 
+trap '[[ "$QUIET" = "n" ]] && date && echo' exit 
 
 # Curl wrapper for calling scaleway API. See https://developers.scaleway.com/en/products/instance/api/
 CALL()
@@ -110,13 +121,13 @@ if [[ "$ORGANIZATION" = 'null' ]]; then
 	exit 3
 fi
 
-echo "Organization found: $ORGANIZATION"
+info "Organization found: $ORGANIZATION"
 
 # LIST SERVERS
 serverlist=$(CALL --request GET "${APIURL}/servers" --data '' | jq '.servers[]|.id,.name' | paste -d, - -)
 
 if [[ -z "$SERVER_NAME" ]]; then
-	echo "Here are your servers. Provide an existing id or name with --server to make a backup:"
+	info "Here are your servers. Provide an existing id or name with --server to make a backup:"
 	echo "$serverlist" | sed 's/^/  /'
 	exit
 fi
@@ -140,26 +151,28 @@ ARCHTYPE=$(echo "$srvjson" | jq .server.image.arch | tr -d '"')
 SERVER_STATE=$(echo "$srvjson" | jq '.server.state' | tr -d '"')
 
 # LIST EXISTING IMAGES
-printf 'Server: "%s" (id:"%s", arch:"%s") has following existing images:\n' "$SERVERNAME" "$SERVERID" "$ARCHTYPE"
+info $(printf 'Server: "%s" (id:"%s", arch:"%s") has following existing images:\n' "$SERVERNAME" "$SERVERID" "$ARCHTYPE")
 
 imagelist=$(CALL --request GET "${APIURL}/images?organization=${ORGANIZATION}" |
 	jq '.images[]|.id,.name,.modification_date,.from_server' | paste - - - - |
 	grep "\"$SERVERID\"$" | awk '{print $1 " " $3 " " $2}')
 
-if  [[ -z "$imagelist" ]]; then
-	echo "  (none)"
-else
-	echo -n "$imagelist" | sed 's/^/  /'
+if [[ "$QUIET" = 'n' ]]; then
+	if  [[ -z "$imagelist" ]]; then
+		info "  (none)"
+	else
+		echo -n "$imagelist" | sed 's/^/  /'
+	fi
+	info
 fi
-echo
 
 if [[ "$SERVER_STATUS" = 'y' ]]; then
-	echo "Server status:"
+	info "Server status:"
 	echo "$srvjson" | jq .
 fi
 
 if [[ -z "$KEYWORD" ]]; then
-	echo "Done"
+	info "Done"
 	trap '' exit 
 	exit
 fi
@@ -187,7 +200,7 @@ result=$(CALL "${APIURL}/servers/$SERVERID/action" --data-binary "$payload" --co
 
 if ! echo "$result" | grep -q '"status": "pending"'; then
 	# The API may reply something like "message":"at least one volume attached to the server is not available"
-	echo "FAIL: Your server or its volumes may be busy right now (server state is '$SERVER_STATE'). The API returned this error:"
+	info "FAIL: Your server or its volumes may be busy right now (server state is '$SERVER_STATE'). The API returned this error:"
 	echo "$result" | jq .
 	exit 6
 fi
@@ -196,7 +209,7 @@ fi
 
 # DELETE FORMER AUTOBACKUPS
 echo "$imagelist" | grep -- "-${KEYWORD}-" | grep -v -- "-${KEYWORD}-${maxidx}" | while read IMGID IMGDATE IMGNAME; do
-	echo "Deleting previous backup image: $IMGNAME ($IMGDATE, $IMGID)"
+	info "Deleting previous backup image: $IMGNAME ($IMGDATE, $IMGID)"
 	IMGID=$(echo "$IMGID" | tr -d '"')
 	CALL "${APIURL}/images/${IMGID}" -X DELETE
 done
@@ -206,14 +219,14 @@ CALL --request GET "${APIURL}/snapshots" |
 	jq '.snapshots[]|.id,.name' | paste - - |
 	grep "\"${SERVERNAME}-${KEYWORD}-" | grep -v "\"$BAKNAME" |
 	while read SNAPID SNAPNAME; do
-		echo "  Deleting associated snapshot: $SNAPNAME ($SNAPID)"
+		info "  Deleting associated snapshot: $SNAPNAME ($SNAPID)"
 		SNAPID=$(echo "$SNAPID" | tr -d '"')
 		CALL "${APIURL}/snapshots/${SNAPID}" -X DELETE  
 	done
 
 ########################################################################
 
-echo "SUCCESS: backup successfully ordered, remote name is '$BAKNAME'"
+info "SUCCESS: backup successfully ordered, remote name is '$BAKNAME'"
 
 # HOW TO CREATE A SERVER (UNUSED)
 create_server()
