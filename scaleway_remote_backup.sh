@@ -114,26 +114,24 @@ CALL()
 
 ########################################################################
 
-# Get organization from the API key. This also serves as a test.
-ORGANIZATION=$(CALL https://account.scaleway.com/organizations -H "X-Auth-Token: $API_TOKEN" | jq .organizations[0].id | tr -d '"')
-if [[ "$ORGANIZATION" = 'null' ]]; then
+# LIST SERVERS
+serverlist=$(CALL --request GET "${APIURL}/servers" --data '' | jq  '.servers[]|.organization,.id,.name' 2>/dev/null | paste -d, - - -)
+
+if [[ -z "$serverlist" ]]; then
 	echo "Your API auth key is probably invalid (found no matching organization). Check at scaleway."
 	exit 3
 fi
 
-info "Organization found: $ORGANIZATION"
-
-# LIST SERVERS
-serverlist=$(CALL --request GET "${APIURL}/servers" --data '' | jq '.servers[]|.id,.name' | paste -d, - -)
-
 if [[ -z "$SERVER_NAME" ]]; then
 	info "Here are your servers. Provide an existing id or name with --server to make a backup:"
-	echo "$serverlist" | sed 's/^/  /'
+	echo "$serverlist" | sed 's/^[^,]*,/  /'
 	exit
 fi
 
+ORGANIZATION=$(echo "$serverlist" | head -1 | cut -d, -f1 | tr -d '"')
+
 # get id from id or from name (exact match is required)
-SERVERID=$(echo "$serverlist" | grep "\"$SERVER_NAME\"" | cut -d, -f1 | tr -d '"')
+SERVERID=$(echo "$serverlist" | grep "\"$SERVER_NAME\"" | cut -d, -f2| tr -d '"')
 
 if [[ -z "$SERVERID" ]]; then
 	echo "Server '$SERVER_NAME' not found. Run without --server to get a list."
@@ -143,7 +141,7 @@ fi
 ########################################################################
 
 # GET SERVER DETAILS
-SERVERNAME=$(echo "$serverlist" | grep "\"$SERVERID\"" | cut -d, -f2 | tr -d '"')
+SERVERNAME=$(echo "$serverlist" | grep "\"$SERVERID\"" | cut -d, -f3 | tr -d '"')
 srvjson=$(CALL --request GET "${APIURL}/servers/${SERVERID}" --data '')
 SERVERID=$(echo "$srvjson" | jq .server.id | tr -d '"')
 ROOTVOLUME=$(echo "$srvjson" | jq .server.image.root_volume.id)   # useful mostly when you want to create a new server
