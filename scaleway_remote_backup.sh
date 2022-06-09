@@ -83,8 +83,12 @@ while [[ $# -gt 0 ]]; do
 		KEYWORD="$1"
 		shift
 		;;
-	*)
+	-h|--help)
 		usage
+		;;
+	*)
+		echo "Unknown argument '$o'. Use -h or --help for more." >> /dev/stderr
+		exit 1
 		;;
 	esac
 done
